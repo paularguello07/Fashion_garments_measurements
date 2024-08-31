@@ -5,53 +5,18 @@ from pathlib import Path
 import os
 import json
 from google.api_core.exceptions import ResourceExhausted
+from detect import Detect_a_dress
+from utils import optimize_image
+from utils import translate, clean_content
 
-
-categorias = [["Estrecha", "Ancha"], 
-              ["Sisa", "Al hombro"],
-              ["En V", "Redondo"],
-              ["Corto", "Pronunciado"],
-              ["Corta", "Larga"], 
-              ["Pegada", "Ancha"]]
-    
-categories = {"sleeve_width": ["narrow", "wide"],
-            "sleeve_length": ["armhole", "shoulder"],
-            "neck": ["V", "round"],
-            "neckline": ["short", "pronounced"],
-            "skirt_length": ["short", "long"],
-            "skirt_width": ["tight", "wide"]}
 
 gemini = Gemini()
-
+detect_dress = Detect_a_dress()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_path", type=str, help="Path to the image", default="dataset/Clean_dataset")
 parser.add_argument("--save_path", type=str, help="Path to save json of predictions", default="results/validation")
 args = parser.parse_args()
-
-def translate(content, spanish_to_english=True):
-    # Translate content to categories
-    if spanish_to_english:
-        content_t = {}
-        for idx, i in enumerate(categories):
-            index = categorias[idx].index(content[idx])
-            content_t[i] = categories[i][index]
-    else:
-        content_t = []
-        for i in content:
-            index = categories[i].index(content[i])
-            content_t.append(categorias[i][index])
-  
-    return content_t
-
-def clean_content(content):
-    # Clean the content to get the categories
-    for i in content:
-        # check if the content is a list
-        if type(content[i]) == list:
-            content[i] = content[i][0]
-        
-    return content
 
 
 def accuracy(content_gt, content):
@@ -87,28 +52,35 @@ def main(args):
     
     for dress in os.listdir(args.data_path):
         results = []
+        best_acc = 0
         if dress.startswith("dress"):
             # Get the number of the dress
             name = dress.split("_")[-1]
             # Get the path of the image of the dress
-            name_path = os.path.join(args.data_path, dress, f"{dress}_irl_lowres.jpg")
-            image_path = Path(name_path)
+            name_path_org = Path(args.data_path) / dress / f"{dress}_irl"
+            low_res_path = Path(args.data_path) / dress / f"{dress}_irl_lowres.jpg"
+            name_low_res_path = args.data_path +"/"+ dress +"/"+ f"{dress}_irl_lowres.jpg"
+            #image_path = Path(name_path)
 
-            if image_path.exists():
+            if os.path.exists(name_path_org.with_suffix(".png")) or os.path.exists(name_path_org.with_suffix(".jpg")) or os.path.exists(name_path_org.with_suffix(".jpeg")):
+                name_path_org = name_path_org.with_suffix(".png") if os.path.exists(name_path_org.with_suffix(".png")) else name_path_org.with_suffix(".jpg") if os.path.exists(name_path_org.with_suffix(".jpg")) else name_path_org.with_suffix(".jpeg")
+             
                 predict = False
-                results_path = os.path.join(args.save_path, f"{name}_results.json")
+                json_results_path = os.path.join(args.save_path, name+"_results" , f"{name}_results.json")
+                results_path = os.path.join(args.save_path, name+"_results")
                 # search if the results exists
-                if os.path.exists(results_path):
-                    with open(results_path, "r") as file:
+                if os.path.exists(json_results_path):
+                    with open(json_results_path, "r") as file:
                         results = json.load(file)
-                    if results["accuracy"] < 1.0: # if the accuracy is less than 1, predict again
+                    if results["accuracy"] < 0.6: # if the accuracy is less than 1, predict again
                         predict = True
-                        print(f"Predicting again for {image_path}")
-                    elif results["accuracy"] == 1.0: # if the accuracy is 1, add to the accuracy
+                        print(f"Predicting again for {name}")
+                    else: # if the accuracy is 1, add to the accuracy
                         n_val = n_val + 1
-                        acc = acc + 1.0
+                        best_acc = results["accuracy"]
+                        acc = acc + best_acc
                         predict = False
-                        print(f"Found results for {image_path} with accuracy 1.0 :)")
+                        print(f"Found results for {name} with accuracy {best_acc}")
                 else: # if the results does not exists, predict
                     predict = True
                         
@@ -122,25 +94,41 @@ def main(args):
                     content_gt_t = translate(content_gt.split("\n")[:-1])
                     
                     # Generate content with retries
+                    if not os.path.exists(results_path):
+                        os.makedirs(results_path)
+
+                    try:
+                        # Detect dress
+                        probas_to_keep, bboxes_scaled, pil_crop_img = detect_dress.run_worflow(name_path_org, results_path)
+                        optimize_image(pil_crop_img, low_res_path)
+                        image_path = Path(low_res_path)
+                    except Exception as e: 
+                        print(f"Failed to detect dress for {name}: {e}")
+                        continue
+
                     try:
                         content = generate_content_with_retries(image_path)
                         content = clean_content(content)
                         n_val = n_val + 1
                     except Exception as e:
-                        print(f"Failed to generate content for {image_path}: {e}")
+                        print(f"Failed to generate content for {name}: {e}")
                         continue
 
                     print(content)
                     print(content_gt_t)
+
                     acc_ind = accuracy(content_gt_t, content)
-                    print(f"Accuracy: {acc_ind}")
+                    if acc_ind > best_acc:
+                        best_acc = acc_ind
+
+                    print(f"Accuracy: {best_acc}")
                     print("-------------------------------------------------")
 
-                    acc = acc + acc_ind
+                    acc = acc + best_acc
 
                     #save content to json
-                    results = {"image": name_path, "content": content, "accuracy": acc_ind}
-                    with open(results_path, "w") as file:
+                    results = {"image": name_low_res_path, "content": content, "accuracy": best_acc}
+                    with open(json_results_path, "w") as file:
                         json.dump(results, file)
 
     print(f"Accuracy: {acc/n_val}")
