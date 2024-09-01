@@ -12,7 +12,7 @@ categorias = [["Estrecha", "Ancha"],
     
 categories = {"sleeve_width": ["narrow", "wide"],
             "sleeve_length": ["armhole", "shoulder"],
-            "neck": ["V", "round"],
+            "neck": ["v", "round"],
             "neckline": ["short", "pronounced"],
             "skirt_length": ["short", "long"],
             "skirt_width": ["tight", "wide"]}
@@ -48,6 +48,6 @@ def clean_content(content):
     for i in content:
         # check if the content is a list
         if type(content[i]) == list:
-            content[i] = content[i][0]
+            content[i] = content[i][0].lower()
         
     return content

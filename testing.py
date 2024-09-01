@@ -44,7 +44,7 @@ content = clean_content(content)
 content_t = translate(content, spanish_to_english=False)
 
 # Save the results
-results = {"content": content, "accuracy": 1}
+results = {"content": content}
 with open(results_path, "w") as file:
     json.dump(results, file)
 
@@ -60,6 +60,30 @@ for dress in os.listdir(args.data_path):
 
         if content_gt == content_t:
             my_dress = dress
+            with open(os.path.join(args.data_path, dress, "skirt_front_distances.txt"), "r") as file:
+                distances_skirt = file.read().split("\n")[:-1]
+                dist_waist_px = distances_skirt[0].split(":")[1]
+                px_to_cm = args.waist_lenght/(2.0*float(dist_waist_px))
+
+            for file in os.listdir(os.path.join(args.data_path, dress)):
+                if file.endswith("distances.txt"):
+                    with open(os.path.join(args.data_path, dress, file), "r") as txt_file:
+                        distances_cms = []
+                        distances = txt_file.read().split("\n")[:-1]
+                        for dist in distances:
+                            dist = dist.split(":")
+                            distances_cms.append(float(dist[1])*px_to_cm)
+
+                        #print(f"Distances for {file}: {distances_cms}")
+                    #crete new file in save path
+                    with open(os.path.join(args.save_path, f"{file}"), "w") as new_file:
+                        for dist in distances_cms:
+                            new_file.write(f"{dist}\n")
+                
+                if file.endswith("coordinates.png"):
+                    os.system(f"cp {os.path.join(args.data_path, dress, file)} {os.path.join(args.save_path, file)}")
+                if file.endswith("uv.png"):
+                    os.system(f"cp {os.path.join(args.data_path, dress, file)} {os.path.join(args.save_path, file)}")
             break
 
 print(f"Predicted dress: {my_dress}")

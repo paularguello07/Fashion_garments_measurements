@@ -72,7 +72,7 @@ def main(args):
                 if os.path.exists(json_results_path):
                     with open(json_results_path, "r") as file:
                         results = json.load(file)
-                    if results["accuracy"] < 0.6: # if the accuracy is less than 1, predict again
+                    if results["accuracy"] < 0.8: # if the accuracy is less than 1, predict again
                         predict = True
                         print(f"Predicting again for {name}")
                     else: # if the accuracy is 1, add to the accuracy
