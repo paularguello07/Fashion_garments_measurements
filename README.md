@@ -31,6 +31,6 @@ El proyecto "Clasificación y Medición de Patrones de Prendas de Moda" tiene co
 
 - `results.py`: Muestra la precisión de cada procesamiento de imagenes
 
-Página del semillero: [Hands on computer vision](semillerocv.github.io)
+Página del semillero: [Hands on computer vision](https://semillerocv.github.io/)
 
 
