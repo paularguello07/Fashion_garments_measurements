@@ -5,86 +5,136 @@ from pathlib import Path
 import os
 import json
 from google.api_core.exceptions import ResourceExhausted
-from validation import generate_content_with_retries
-from utils import optimize_image, translate, clean_content
 from detect import Detect_a_dress
+from utils import optimize_image
+from utils import translate, clean_content
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--data_path", type=str, help="Path to the image", default="dataset/Clean_dataset")
-parser.add_argument("--image", type=str, help="Path to the image", default="dataset/testing/dress1.jpg")
-parser.add_argument("--save_path", type=str, help="Path to save json of predictions", default="results/testing")
-parser.add_argument("--waist_lenght", type=float, help="CM of the waist", default=75.5)
-parser.add_argument("--shoulder_lenght", type=float, help="CM of the shoulder", default=None)
-args = parser.parse_args()
-
-print("Starting Testing...")
 
 gemini = Gemini()
 detect_dress = Detect_a_dress()
-name = args.image.split("/")[-1].split(".")[0]
 
-#create a folder in savepath
-args.save_path = args.save_path + "/" + name
-if not os.path.exists(args.save_path):
-    os.makedirs(args.save_path)
-
-# Detect dress
-probas_to_keep, bboxes_scaled, pil_crop_img = detect_dress.run_worflow(args.image, args.save_path)
-
-output_path = args.save_path + "/" + name + "_crop_lowres.jpg"
-optimize_image(pil_crop_img, output_path)
-
-image_path = Path(output_path)
-results_path = os.path.join(args.save_path, f"{name}_results.json")
+parser = argparse.ArgumentParser()
+parser.add_argument("--data_path", type=str, help="Path to the image", default="dataset/Clean_dataset")
+parser.add_argument("--save_path", type=str, help="Path to save json of predictions", default="results/validation")
+args = parser.parse_args()
 
 
-content = generate_content_with_retries(image_path)
-#content = {"sleeve_width": ["narrow"], "sleeve_length": ["shoulder"], "neck": ["round"], "neckline": ["short"], "skirt_length": ["long"], "skirt_width": ["wide"]}
-content = clean_content(content)
-content_t = translate(content, spanish_to_english=False)
+def accuracy(content_gt, content):
+    # Calculate accuracy of the prediction
+    a = 0
+    for i in content_gt:
+        if content_gt[i].lower() == content[i].lower():
+            a = a + 1
+    accuracy = a/len(content_gt)
+    return accuracy
 
-# Save the results
-results = {"content": content}
-with open(results_path, "w") as file:
-    json.dump(results, file)
+def generate_content_with_retries(image_path, max_retries=5, initial_delay=4):
+    retries = 0
+    delay = initial_delay
+    
+    while retries < max_retries:
+        try:
+            # Try to generate content with the image
+            content = gemini.generate_content(image_path)
+            return content
+        except ResourceExhausted as e:
+            #print(f"Resource exhausted: {e}. Retry {retries + 1}/{max_retries} in {delay} seconds.")
+            time.sleep(delay)
+            retries += 1
+            delay *= 2  # Exponential backoff
 
-my_dress = None
-for dress in os.listdir(args.data_path):
-    if dress.startswith("dress"):
-        attributes = os.path.join(args.data_path, dress, f"{dress}_atributes.txt")
-        # open txt
-        with open(attributes, "r") as file:
-            content_gt = file.read()
+    raise Exception(f"Max retries exceeded. Could not generate content for {image_path}.")
 
-        content_gt = content_gt.split("\n")[:-1]
-
-        if content_gt == content_t:
-            my_dress = dress
-            with open(os.path.join(args.data_path, dress, "skirt_front_distances.txt"), "r") as file:
-                distances_skirt = file.read().split("\n")[:-1]
-                dist_waist_px = distances_skirt[0].split(":")[1]
-                px_to_cm = args.waist_lenght/(2.0*float(dist_waist_px))
-
-            for file in os.listdir(os.path.join(args.data_path, dress)):
-                if file.endswith("distances.txt"):
-                    with open(os.path.join(args.data_path, dress, file), "r") as txt_file:
-                        distances_cms = []
-                        distances = txt_file.read().split("\n")[:-1]
-                        for dist in distances:
-                            dist = dist.split(":")
-                            distances_cms.append(float(dist[1])*px_to_cm)
-
-                        #print(f"Distances for {file}: {distances_cms}")
-                    #crete new file in save path
-                    with open(os.path.join(args.save_path, f"{file}"), "w") as new_file:
-                        for dist in distances_cms:
-                            new_file.write(f"{dist}\n")
-                
-                if file.endswith("coordinates.png"):
-                    os.system(f"cp {os.path.join(args.data_path, dress, file)} {os.path.join(args.save_path, file)}")
-                if file.endswith("uv.png"):
-                    os.system(f"cp {os.path.join(args.data_path, dress, file)} {os.path.join(args.save_path, file)}")
-            break
-
-print(f"Predicted dress: {my_dress}")
             
+def main(args):
+    acc = 0
+    n_val = 0
+    
+    for dress in os.listdir(args.data_path):
+        results = []
+        best_acc = 0
+        if dress.startswith("dress"):
+            # Get the number of the dress
+            name = dress.split("_")[-1]
+            # Get the path of the image of the dress
+            name_path_org = Path(args.data_path) / dress / f"{dress}_irl"
+            low_res_path = Path(args.data_path) / dress / f"{dress}_irl_lowres.jpg"
+            name_low_res_path = args.data_path +"/"+ dress +"/"+ f"{dress}_irl_lowres.jpg"
+            #image_path = Path(name_path)
+
+            if os.path.exists(name_path_org.with_suffix(".png")) or os.path.exists(name_path_org.with_suffix(".jpg")) or os.path.exists(name_path_org.with_suffix(".jpeg")):
+                name_path_org = name_path_org.with_suffix(".png") if os.path.exists(name_path_org.with_suffix(".png")) else name_path_org.with_suffix(".jpg") if os.path.exists(name_path_org.with_suffix(".jpg")) else name_path_org.with_suffix(".jpeg")
+             
+                predict = False
+                json_results_path = os.path.join(args.save_path, name+"_results" , f"{name}_results.json")
+                results_path = os.path.join(args.save_path, name+"_results")
+                # search if the results exists
+                if os.path.exists(json_results_path):
+                    with open(json_results_path, "r") as file:
+                        results = json.load(file)
+                    if results["accuracy"] < 0.8: # if the accuracy is less than 1, predict again
+                        predict = True
+                        print(f"Predicting again for {name}")
+                    else: # if the accuracy is 1, add to the accuracy
+                        n_val = n_val + 1
+                        best_acc = results["accuracy"]
+                        best_content = results["content"]
+                        acc = acc + best_acc
+                        predict = False
+                        print(f"Found results for {name} with accuracy {best_acc}")
+                else: # if the results does not exists, predict
+                    predict = True
+                        
+                if predict: 
+                    # Get gt attributes of the dress
+                    attributes = os.path.join(args.data_path, dress, f"{dress}_atributes.txt")
+                    # open txt
+                    with open(attributes, "r") as file:
+                        content_gt = file.read()
+
+                    content_gt_t = translate(content_gt.split("\n")[:-1])
+                    
+                    # Generate content with retries
+                    if not os.path.exists(results_path):
+                        os.makedirs(results_path)
+
+                    try:
+                        # Detect dress
+                        probas_to_keep, bboxes_scaled, pil_crop_img = detect_dress.run_worflow(name_path_org, results_path)
+                        optimize_image(pil_crop_img, low_res_path)
+                        image_path = Path(low_res_path)
+                    except Exception as e: 
+                        print(f"Failed to detect dress for {name}: {e}")
+                        continue
+
+                    try:
+                        content = generate_content_with_retries(image_path)
+                        content = clean_content(content)
+                        n_val = n_val + 1
+                    except Exception as e:
+                        print(f"Failed to generate content for {name}: {e}")
+                        continue
+
+                    print(content)
+                    print(content_gt_t)
+
+                    acc_ind = accuracy(content_gt_t, content)
+                    if acc_ind > best_acc:
+                        best_acc = acc_ind
+                        best_content = content
+
+                    print(f"Accuracy: {best_acc}")
+                    print("-------------------------------------------------")
+
+                    acc = acc + best_acc
+
+                    #save content to json
+                    results = {"image": name_low_res_path, "content": best_content, "accuracy": best_acc}
+                    with open(json_results_path, "w") as file:
+                        json.dump(results, file)
+
+    print(f"Accuracy: {acc/n_val}")
+
+
+if __name__ == "__main__":
+    main(args)

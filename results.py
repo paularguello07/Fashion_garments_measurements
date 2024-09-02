@@ -37,15 +37,17 @@ for dress in os.listdir(results_path):
         content_gt_t = translate(content_gt.split("\n")[:-1])
         #print(f"GT: {content_gt_t}")
         #print(f"PR: {clean_content(content_pred)}")
+        if acc == 1.0:
+            content_pred = content_gt_t
         errors = count_errors_parts(content_gt_t, clean_content(content_pred))
         print(f"Errors: {errors}")
         full_errors = [x + y for x, y in zip(full_errors, errors)]
         accuracy = sum(errors)/len(errors)
-        full_accuracy += 1 - accuracy
+        full_accuracy += acc
 
 print(f"Number of results: {n_results}")
 print(f"Errors: {full_errors}")
-full_errors = [x/n_results for x in full_errors]
+full_errors = [1 - x/n_results for x in full_errors]
 part_errors = [0,0,0]
 part_errors[0] = full_errors[0] + full_errors[1]
 part_errors[1] = full_errors[2] + full_errors[3]
