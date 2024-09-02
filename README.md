@@ -1,4 +1,4 @@
-# Fashion_garments_measurements
+# Clasificación y Medición de Patrones de Prendas de Moda
 
 
 <p align="center">
