@@ -19,17 +19,17 @@ El proyecto "Clasificación y Medición de Patrones de Prendas de Moda" tiene co
 
 ## Estructura del código
 
--`dataset/`: En este directorio se almacenan todas las combinaciones de los diferentes vestidos con modelos en diferentes perspectivas, junto con las caracteristicas que los describen
+- `dataset/`: En este directorio se almacenan todas las combinaciones de los diferentes vestidos con modelos en diferentes perspectivas, junto con las caracteristicas que los describen
 
--`detect.py`: Detecta los vestidos de una imagen dada
+- `detect.py`: Detecta los vestidos de una imagen dada
 
--`gemini.py`: Identifica las características del vestido que se reconoció en el archivo detect.py
+- `gemini.py`: Identifica las características del vestido que se reconoció en el archivo detect.py
 
--`testing.py`: Compara las imagenes de entrada con cada una de las combinaciones de dataset/
+- `testing.py`: Compara las imagenes de entrada con cada una de las combinaciones de dataset/
 
--`test_real_images.py`: Compara con imagenes del mundo real las combinaciones de dataset/ y con la medida en centrimetros de la cintura se hace una relación con los pixeles para hallar la medida de los patronajes
+- `test_real_images.py`: Compara con imagenes del mundo real las combinaciones de dataset/ y con la medida en centrimetros de la cintura se hace una relación con los pixeles para hallar la medida de los patronajes
 
--`results.py`: Muestra la precisión de cada procesamiento de imagenes
+- `results.py`: Muestra la precisión de cada procesamiento de imagenes
 
 Página del semillero: [Hands on computer vision](semillerocv.github.io)
 
