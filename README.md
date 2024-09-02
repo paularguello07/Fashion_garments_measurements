@@ -3,9 +3,9 @@
 
 <p align="center">
   <p align="center">
-    <img src="./banner.png" alt="Description of the image" width="1600">
+    <img src="./banner.jpg" alt="Description of the image" width="1600">
   <p align="center">
-    <a href="https://github.com/paularguello07" rel="external nofollow noopener" target="_blank"><strong>Paula Arguello/strong></a>
+    <a href="https://github.com/paularguello07" rel="external nofollow noopener" target="_blank"><strong>Paula Arguello</strong></a>
     ·
     <a href="https://github.com/valperz" rel="external nofollow noopener" target="_blank"><strong>Valentina Pérez</strong></a>
     ·
